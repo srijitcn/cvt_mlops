@@ -1,10 +1,10 @@
-new_cluster: &new_cluster
-  new_cluster:
-    num_workers: 3
-    spark_version: 13.3.x-cpu-ml-scala2.12
-    node_type_id: Standard_D3_v2
-    custom_tags:
-      clusterSource: mlops-stack/0.2
+#new_cluster: &new_cluster
+#  new_cluster:
+#    num_workers: 3
+#    spark_version: 13.3.x-cpu-ml-scala2.12
+#    node_type_id: Standard_D3_v2
+#    custom_tags:
+#      clusterSource: mlops-stack/0.2
 
 permissions: &permissions
   permissions:
@@ -17,7 +17,8 @@ resources:
       name: ${bundle.target}-cvt_mlops_stacks_demo-batch-inference-job
       tasks:
         - task_key: batch_inference_job
-          <<: *new_cluster
+          #<<: *new_cluster
+          existing_cluster_id: 1030-160409-i28anxhk
           notebook_task:
             notebook_path: ../deployment/batch_inference/notebooks/BatchInference.py
             base_parameters:
@@ -28,9 +29,9 @@ resources:
               # git source information of current ML resource deployment. It will be persisted as part of the workflow run
               git_source_info: url:${bundle.git.origin_url}; branch:${bundle.git.branch}; commit:${bundle.git.commit}
 
-      schedule:
-        quartz_cron_expression: "0 0 11 * * ?" # daily at 11am
-        timezone_id: UTC
+      #schedule:
+      #  quartz_cron_expression: "0 0 11 * * ?" # daily at 11am
+      #  timezone_id: UTC
       <<: *permissions
       # If you want to turn on notifications for this job, please uncomment the below code,
       # and provide a list of emails to the on_failure argument.
