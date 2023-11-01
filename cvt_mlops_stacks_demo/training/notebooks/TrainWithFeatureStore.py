@@ -67,21 +67,7 @@ model_name = dbutils.widgets.get("model_name")
 
 # COMMAND ----------
 
-# DBTITLE 1, Set experiment
-import mlflow
-
-mlflow.set_experiment(experiment_name)
-mlflow.set_registry_uri('databricks')
-
-# COMMAND ----------
-
 # DBTITLE 1, Helper functions
-import mlflow
-import mlflow.pytorch
-from mlflow.tracking import MlflowClient
-
-# COMMAND ----------
-
 import json
 import os
 from pprint import pprint
@@ -99,8 +85,17 @@ except FileNotFoundError:
 
 # COMMAND ----------
 
+# DBTITLE 1, Set experiment
+import mlflow
+import mlflow.pytorch
+from mlflow.tracking import MlflowClient
+
+
+# COMMAND ----------
+
 IMG_PATH = settings['img_path']
-experiment_info=mlflow.set_experiment(settings['experiment_name'])
+mlflow.set_registry_uri('databricks')
+experiment_info = mlflow.set_experiment(experiment_name)
 
 # COMMAND ----------
 
@@ -158,10 +153,6 @@ df_train, df_val = training_df.randomSplit([0.7, 0.3], seed=12345)
 
 # COMMAND ----------
 
-
-
-# COMMAND ----------
-
 from pyspark import keyword_only
 from pyspark.ml.classification import LogisticRegression
 from pyspark.ml.feature import VectorAssembler
@@ -173,14 +164,20 @@ from pyspark.sql.functions import col, udf
 
 seqAsVector = udf(lambda x : Vectors.dense(x), returnType=VectorUDT())
 
-# used as a multi class classifier
-lr = LogisticRegression(maxIter=1, regParam=0.03, elasticNetParam=0.5, labelCol="label", featuresCol="feature")
-va = VectorAssembler(inputCols=["dense_features"],outputCol="feature")
+mlflow.spark.autolog()
 
-# define a pipeline model
-model = Pipeline(stages=[va,lr])
-train_df = df_train.withColumn("dense_features", seqAsVector("features"))
-spark_model = model.fit(train_df) # start fitting or training
+with mlflow.start_run() as run:
+    # used as a multi class classifier
+    lr = LogisticRegression(maxIter=1, regParam=0.03, elasticNetParam=0.5, labelCol="label", featuresCol="feature")
+    va = VectorAssembler(inputCols=["dense_features"],outputCol="feature")
+
+    # define a pipeline model
+    model = Pipeline(stages=[va,lr])
+    train_df = df_train.withColumn("dense_features", seqAsVector("features"))
+    spark_model = model.fit(train_df) # start fitting or training
+
+    mlflow.spark.log_model(spark_model,artifact_path="model",registered_model_name=model_name)
+
 
 # COMMAND ----------
 
@@ -195,10 +192,6 @@ spark_model = model.fit(train_df) # start fitting or training
 #    registered_model_name=model_name,
 #)
 
-mlflow.end_run()
-
-with mlflow.start_run() as run:
-    mlflow.spark.log_model(spark_model,artifact_path="model",registered_model_name=model_name)
 
 
 # COMMAND ----------
