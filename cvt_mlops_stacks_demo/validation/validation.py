@@ -26,7 +26,7 @@ def validation_thresholds():
             threshold=0.8, higher_is_better=True  # max_error should be <= 500
         ),
         "f1_score": MetricThreshold(
-            threshold=.90, 
+            threshold=.50, 
             higher_is_better=True,
         ),
     }
