@@ -10,21 +10,6 @@ dbutils.widgets.removeAll()
 # It is configured and can be executed as the tasks in the write_feature_table_job workflow defined under
 # ``cvt_mlops_stacks_demo/resources/feature-engineering-workflow-resource.yml``
 #
-# Parameters:
-#
-# * env (required)                - The deploy environment
-# * user_uuid (required)          - The deploy environment
-# * output_table_name (required)  - Fully qualified schema + Delta table name for the feature table where the features
-# *                                 will be written to. Note that this will create the Feature table if it does not
-# *                                 exist.
-# * primary_keys (required)       - A comma separated string of primary key columns of the output feature table.
-# *
-# * timestamp_column (optional)   - Timestamp column of the input data. Used to limit processing based on
-# *                                 date ranges. This column is used as the timestamp_key column in the feature table.
-# * input_start_date (optional)   - Used to limit feature computations based on timestamp_column values.
-# * input_end_date (optional)     - Used to limit feature computations based on timestamp_column values.
-# *
-# * features_transform_module (required) - Python module containing the feature transform logic.
 ##################################################################################
 
 

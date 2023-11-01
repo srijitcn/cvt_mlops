@@ -17,7 +17,7 @@ def deploy(model_uri, env):
     """
     print(f"Deployment running in env: {env}")
     _, model_name, version = model_uri.split("/")
-    client = MlflowClient(registry_uri="databricks-uc")
+    client = MlflowClient(registry_uri="databricks")
     mv = client.get_model_version(model_name, version)
     target_alias = "Champion"
     if target_alias not in mv.aliases:

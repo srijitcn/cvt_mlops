@@ -349,7 +349,7 @@ with mlflow.start_run(
         mlflow.log_artifact(metrics_file)
         log_to_model_description(run, True)
 
-        target_stage = "Production" if env == "Production" else "Staging"
+        target_stage = "Production" if env == "production" else "Staging"
         
         print(f"Validation checks passed. Transitioning to {target_stage}")
         client.transition_model_version_stage(model_name,version=model_version, stage="Staging", archive_existing_versions=True)
