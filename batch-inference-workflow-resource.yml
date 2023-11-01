@@ -23,8 +23,10 @@ resources:
             notebook_path: ../deployment/batch_inference/notebooks/BatchInference.py
             base_parameters:
               env: ${bundle.target}
-              input_table_name: ${bundle.target}.cvt.feature_store_inference_input  # TODO: create input table for inference
-              output_table_name: ${bundle.target}.cvt.predictions
+              user_uuid: 8243
+              patch_output_table_name: mlops_demo.cvt_${bundle.target}.patch_features
+              patch_features_module: feature-extraction
+              patch_primary_keys:id
               model_name: ${bundle.target}.cvt.${var.model_name}
               # git source information of current ML resource deployment. It will be persisted as part of the workflow run
               git_source_info: url:${bundle.git.origin_url}; branch:${bundle.git.branch}; commit:${bundle.git.commit}

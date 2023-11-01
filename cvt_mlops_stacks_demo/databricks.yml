@@ -8,7 +8,7 @@ variables:
     default: /Users/${workspace.current_user.userName}/${bundle.target}-cvt_mlops_stacks_demo-experiment
   model_name:
     description: Model name for the model training.
-    default: cvt_mlops_stacks_demo-model
+    default: cvt_tumor_classifier
 
 include:
   # Resources folder contains ML artifact resources for the ml project that defines model and experiment
