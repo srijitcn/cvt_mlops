@@ -1,4 +1,8 @@
 # Databricks notebook source
+dbutils.widgets.removeAll()
+
+# COMMAND ----------
+
 ##################################################################################
 # Model Validation Notebook
 ##
@@ -60,22 +64,20 @@ notebook_path =  '/Workspace/' + os.path.dirname(dbutils.notebook.entry_point.ge
 
 # COMMAND ----------
 
-dbutils.widgets.text(
-    "experiment_name",
-    "/dev-cvt_mlops_stacks_demo-experiment",
-    "Experiment Name",
-)
-dbutils.widgets.dropdown("run_mode", "disabled", ["disabled", "dry_run", "enabled"], "Run Mode")
+dbutils.widgets.text("experiment_name","/mlops_demo/dev_cvt_tumor_classifier","Experiment Name")
+dbutils.widgets.dropdown("run_mode", "enabled", ["disabled", "dry_run", "enabled"], "Run Mode")
 dbutils.widgets.dropdown("enable_baseline_comparison", "false", ["true", "false"], "Enable Baseline Comparison")
-dbutils.widgets.text("validation_input", "SELECT * FROM delta.`dbfs:/databricks-datasets/nyctaxi-with-zipcodes/subsampled`", "Validation Input")
 
-dbutils.widgets.text("model_type", "regressor", "Model Type")
-dbutils.widgets.text("targets", "fare_amount", "Targets")
+dbutils.widgets.text("model_type", "classifier", "Model Type")
+dbutils.widgets.text("targets", "label", "Targets")
 dbutils.widgets.text("custom_metrics_loader_function", "custom_metrics", "Custom Metrics Loader Function")
+dbutils.widgets.text("validation_input", "SELECT id,features,label FROM mlops_demo.cvt.patch_features LIMIT 10", "Validation Input")
 dbutils.widgets.text("validation_thresholds_loader_function", "validation_thresholds", "Validation Thresholds Loader Function")
 dbutils.widgets.text("evaluator_config_loader_function", "evaluator_config", "Evaluator Config Loader Function")
-dbutils.widgets.text("model_name", "dev.cvt.cvt_mlops_stacks_demo-model", "Full (Three-Level) Model Name")
-dbutils.widgets.text("model_version", "", "Candidate Model Version")
+dbutils.widgets.text("model_name", "cvt_tumor_classifier", label="Full (Three-Level) Model Name")
+dbutils.widgets.text("model_version", "1", "Candidate Model Version")
+dbutils.widgets.text("env", "dev", "model environment")
+
 
 # COMMAND ----------
 
@@ -83,7 +85,7 @@ print(
     "Currently model validation is not supported for models registered with feature store. Please refer to "
     "issue https://github.com/databricks/mlops-stacks/issues/70 for more details."
 )
-dbutils.notebook.exit(0)
+
 run_mode = dbutils.widgets.get("run_mode").lower()
 assert run_mode == "disabled" or run_mode == "dry_run" or run_mode == "enabled"
 
@@ -113,16 +115,18 @@ import traceback
 
 from mlflow.tracking.client import MlflowClient
 
-client = MlflowClient(registry_uri="databricks-uc")
+client = MlflowClient(registry_uri="databricks")
 
 # set experiment
 experiment_name = dbutils.widgets.get("experiment_name")
 mlflow.set_experiment(experiment_name)
 
+env = dbutils.widgets.get("env")
+
 # set model evaluation parameters that can be inferred from the job
 model_uri = dbutils.jobs.taskValues.get("Train", "model_uri", debugValue="")
 model_name = dbutils.jobs.taskValues.get("Train", "model_name", debugValue="")
-model_version = dbutils.jobs.taskValues.get("Train", "model_version", debugValue="")
+model_version = dbutils.jobs.taskValues.get("Train", "model_version", debugValue="1")
 
 if model_uri == "":
     model_name = dbutils.widgets.get("model_name")
@@ -213,6 +217,92 @@ def log_to_model_description(run, success):
 
 # COMMAND ----------
 
+import mlflow
+mlflow.set_experiment(experiment_name)
+mlflow.set_registry_uri('databricks')
+
+def get_latest_model_version(model_name):
+    latest_version = 1
+    mlflow_client = MlflowClient()
+    for mv in mlflow_client.search_model_versions(f"name='{model_name}'"):
+        version_int = int(mv.version)
+        if version_int > latest_version:
+            latest_version = version_int
+    return latest_version
+
+
+# COMMAND ----------
+
+from pyspark.ml.linalg import Vectors, VectorUDT
+from pyspark.sql.functions import col, udf
+seqAsVector = udf(lambda x : Vectors.dense(x), returnType=VectorUDT())
+
+# COMMAND ----------
+
+data = spark.sql("SELECT id,features,label FROM mlops_demo.cvt.patch_features LIMIT 10")
+eval_data = data.withColumn("dense_features", seqAsVector("features")).cache()
+
+# COMMAND ----------
+
+eval_data.count()
+
+# COMMAND ----------
+
+model_version = get_latest_model_version(model_name)
+model_uri = f"models:/{model_name}/{model_version}"
+
+# COMMAND ----------
+
+model = mlflow.spark.load_model(model_uri)
+
+# COMMAND ----------
+
+result_df = model.transform(eval_data).select("prediction","label")
+
+# COMMAND ----------
+
+display(result_df)
+
+# COMMAND ----------
+
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+
+evaluator = MulticlassClassificationEvaluator(labelCol="label",predictionCol="prediction") 
+
+f1_score = evaluator.evaluate(result_df, {evaluator.metricName: 'f1'})
+precision = evaluator.evaluate(result_df,{evaluator.metricName: 'weightedPrecision'})
+recall = evaluator.evaluate(result_df, {evaluator.metricName: 'weightedRecall'})
+accuracy = evaluator.evaluate(result_df, {evaluator.metricName: 'accuracy'})
+
+print('F1-Score ', f1_score)
+print('Precision ', precision)
+print('Recall ', recall)
+print('Accuracy ', accuracy)
+
+eval_result_metrics = {
+    "f1_score":f1_score,
+    "precision":precision,
+    "recall":recall,
+    "accuracy":accuracy
+}
+
+# COMMAND ----------
+
+from mlflow.models import MetricThreshold
+
+def validate_thresholds(thresholds, eval_results):
+    for t in thresholds:
+        threshold = thresholds[t].threshold        
+        result_value = eval_results[t]
+        if thresholds[t].higher_is_better:
+            if result_value < threshold:
+                raise Exception(f"Evaluation failed for {t}")
+        else:
+            if result_value > threshold:
+                raise Exception(f"Evaluation failed for {t}")
+
+# COMMAND ----------
+
 training_run = get_training_run(model_name, model_version)
 
 # run evaluate
@@ -220,46 +310,37 @@ with mlflow.start_run(
     run_name=generate_run_name(training_run),
     description=generate_description(training_run),
 ) as run, tempfile.TemporaryDirectory() as tmp_dir:
-    validation_thresholds_file = os.path.join(tmp_dir, "validation_thresholds.txt")
-    with open(validation_thresholds_file, "w") as f:
-        if validation_thresholds:
-            for metric_name in validation_thresholds:
-                f.write(
-                    "{0:30}  {1}\n".format(
-                        metric_name, str(validation_thresholds[metric_name])
-                    )
-                )
-    mlflow.log_artifact(validation_thresholds_file)
-
+    
     try:
-        eval_result = mlflow.evaluate(
-            model=model_uri,
-            data=data,
-            targets=targets,
-            model_type=model_type,
-            evaluators=evaluators,
-            validation_thresholds=validation_thresholds,
-            custom_metrics=custom_metrics,
-            baseline_model=None
-            if not enable_baseline_comparison
-            else baseline_model_uri,
-            evaluator_config=evaluator_config,
-        )
+        validate_thresholds(validation_thresholds, eval_result_metrics)
+        validation_thresholds_file = os.path.join(tmp_dir, "validation_thresholds.txt")
+        
+        with open(validation_thresholds_file, "w") as f:
+            if validation_thresholds:
+                for metric_name in validation_thresholds:
+                    f.write(
+                        "{0:30}  {1}\n".format(
+                            metric_name, str(validation_thresholds[metric_name])
+                        )
+                    )
+        mlflow.log_artifact(validation_thresholds_file)
+
         metrics_file = os.path.join(tmp_dir, "metrics.txt")
         with open(metrics_file, "w") as f:
             f.write(
                 "{0:30}  {1:30}  {2}\n".format("metric_name", "candidate", "baseline")
             )
-            for metric in eval_result.metrics:
-                candidate_metric_value = str(eval_result.metrics[metric])
+            for metric in eval_result_metrics:
+                candidate_metric_value = str(eval_result_metrics[metric])
                 baseline_metric_value = "N/A"
-                if metric in eval_result.baseline_model_metrics:
-                    mlflow.log_metric(
-                        "baseline_" + metric, eval_result.baseline_model_metrics[metric]
-                    )
-                    baseline_metric_value = str(
-                        eval_result.baseline_model_metrics[metric]
-                    )
+                
+                #if metric in eval_result.baseline_model_metrics:
+                #    mlflow.log_metric(
+                #        "baseline_" + metric, eval_result.baseline_model_metrics[metric]
+                #    )
+                #    baseline_metric_value = str(
+                #        eval_result.baseline_model_metrics[metric]
+                #    )
                 f.write(
                     "{0:30}  {1:30}  {2}\n".format(
                         metric, candidate_metric_value, baseline_metric_value
@@ -267,10 +348,11 @@ with mlflow.start_run(
                 )
         mlflow.log_artifact(metrics_file)
         log_to_model_description(run, True)
+
+        target_stage = "Production" if env == "Production" else "Staging"
         
-        # Assign "Challenger" alias to indicate model version has passed validation checks
-        print("Validation checks passed. Assigning 'Challenger' alias to model version.")
-        client.set_registered_model_alias(model_name, "Challenger", model_version)
+        print(f"Validation checks passed. Transitioning to {target_stage}")
+        client.transition_model_version_stage(model_name,version=model_version, stage="Staging", archive_existing_versions=True)
         
     except Exception as err:
         log_to_model_description(run, False)
@@ -279,9 +361,10 @@ with mlflow.start_run(
             f.write("Validation failed : " + str(err) + "\n")
             f.write(traceback.format_exc())
         mlflow.log_artifact(error_file)
-        if not dry_run:
-            raise err
-        else:
-            print(
-                "Model validation failed in DRY_RUN. It will not block model deployment."
-            )
+
+        raise err
+        
+
+# COMMAND ----------
+
+

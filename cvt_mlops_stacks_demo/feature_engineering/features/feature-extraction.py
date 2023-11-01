@@ -34,6 +34,11 @@ dbutils.widgets.text("patch_primary_keys", "id",label="Primary keys columns for 
 
 # COMMAND ----------
 
+# MAGIC %sh
+# MAGIC ls -al /dbfs/FileStore/
+
+# COMMAND ----------
+
 env = dbutils.widgets.get("env")
 user_uid = dbutils.widgets.get("user_uuid")
 patch_output_table_name = dbutils.widgets.get("patch_output_table_name")
@@ -51,7 +56,7 @@ from pprint import pprint
 
 project_name='digital-pathology'
 
-config_path=f"/dbfs/FileStore/{user_uid}_{project_name}_configs.json"
+config_path=f"/dbfs/FileStore/mlops_digital_pathology/{env}/{user_uid}_{project_name}_configs.json"
 
 try:
   with open(config_path,'rb') as f:
@@ -123,11 +128,9 @@ dataset_df = (
 
 # COMMAND ----------
 
-features_df=dataset_df.select('*',featurize_raw_img_series_udf('content').alias('features'))
-
-# COMMAND ----------
-
-features_df.count()
+features_df=(dataset_df
+             .select('*',featurize_raw_img_series_udf('content').alias('features'))
+)
 
 # COMMAND ----------
 
