@@ -124,9 +124,9 @@ mlflow.set_experiment(experiment_name)
 env = dbutils.widgets.get("env")
 
 # set model evaluation parameters that can be inferred from the job
-model_uri = dbutils.jobs.taskValues.get("Train", "model_uri", debugValue="")
-model_name = dbutils.jobs.taskValues.get("Train", "model_name", debugValue="")
-model_version = dbutils.jobs.taskValues.get("Train", "model_version", debugValue="1")
+model_uri = dbutils.jobs.taskValues.get("TrainTask", "model_uri", debugValue="")
+model_name = dbutils.jobs.taskValues.get("TrainTask", "model_name", debugValue="")
+model_version = dbutils.jobs.taskValues.get("TrainTask", "model_version", debugValue="1")
 
 if model_uri == "":
     model_name = dbutils.widgets.get("model_name")
