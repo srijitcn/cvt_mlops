@@ -26,7 +26,7 @@ resources:
             notebook_path: ../training/notebooks/TrainWithFeatureStore.py
             base_parameters:
               env: ${bundle.target}
-              user_uuid: 8243
+              user_uuid: "8243"
               patch_output_table_name: mlops_demo.cvt_${bundle.target}.patch_features
               patch_features_module: feature-extraction
               patch_primary_keys: id
@@ -43,7 +43,7 @@ resources:
             notebook_path: ../validation/notebooks/ModelValidation.py
             base_parameters:              
               env: ${bundle.target}
-              user_uuid: 8243
+              user_uuid: "8243"
               patch_output_table_name: mlops_demo.cvt_${bundle.target}.patch_features
               patch_features_module: feature-extraction
               patch_primary_keys: id
