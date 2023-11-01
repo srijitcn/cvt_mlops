@@ -75,7 +75,7 @@ dbutils.widgets.text("validation_input", "SELECT id,features,label FROM mlops_de
 dbutils.widgets.text("validation_thresholds_loader_function", "validation_thresholds", "Validation Thresholds Loader Function")
 dbutils.widgets.text("evaluator_config_loader_function", "evaluator_config", "Evaluator Config Loader Function")
 dbutils.widgets.text("model_name", "cvt_tumor_classifier", label="Full (Three-Level) Model Name")
-dbutils.widgets.text("model_version", "1", "Candidate Model Version")
+dbutils.widgets.text("model_version", "5", "Candidate Model Version")
 dbutils.widgets.text("env", "dev", "model environment")
 
 
@@ -127,6 +127,7 @@ env = dbutils.widgets.get("env")
 model_uri = dbutils.jobs.taskValues.get("TrainTask", "model_uri", debugValue="")
 model_name = dbutils.jobs.taskValues.get("TrainTask", "model_name", debugValue="")
 model_version = dbutils.jobs.taskValues.get("TrainTask", "model_version", debugValue="1")
+run_id = dbutils.jobs.taskValues.get("TrainTask", "run_id", debugValue="0")
 
 if model_uri == "":
     model_name = dbutils.widgets.get("model_name")
@@ -304,10 +305,11 @@ def validate_thresholds(thresholds, eval_results):
 # COMMAND ----------
 
 training_run = get_training_run(model_name, model_version)
+run_name=generate_run_name(training_run)
 
 # run evaluate
 with mlflow.start_run(
-    run_name=generate_run_name(training_run),
+    run_name=run_name,
     description=generate_description(training_run),
 ) as run, tempfile.TemporaryDirectory() as tmp_dir:
     
@@ -352,7 +354,7 @@ with mlflow.start_run(
         target_stage = "Production" if env == "production" else "Staging"
         
         print(f"Validation checks passed. Transitioning to {target_stage}")
-        client.transition_model_version_stage(model_name,version=model_version, stage="Staging", archive_existing_versions=True)
+        client.transition_model_version_stage(model_name,version=model_version, stage=target_stage, archive_existing_versions=True)
         
     except Exception as err:
         log_to_model_description(run, False)

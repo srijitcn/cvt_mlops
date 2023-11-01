@@ -166,9 +166,21 @@ seqAsVector = udf(lambda x : Vectors.dense(x), returnType=VectorUDT())
 
 mlflow.spark.autolog()
 
+#mostly we will have a hyper parameter tuning step here
+model_params = {
+    "maxIter":1,
+    "regParam":0.03,
+    "elasticNetParam":0.5
+}
+
 with mlflow.start_run() as run:
     # used as a multi class classifier
-    lr = LogisticRegression(maxIter=1, regParam=0.03, elasticNetParam=0.5, labelCol="label", featuresCol="feature")
+    lr = LogisticRegression(maxIter=model_params["maxIter"],
+                            regParam=model_params["regParam"], 
+                            elasticNetParam=model_params["elasticNetParam"],
+                            labelCol="label",
+                            featuresCol="feature")
+    
     va = VectorAssembler(inputCols=["dense_features"],outputCol="feature")
 
     # define a pipeline model
@@ -176,6 +188,7 @@ with mlflow.start_run() as run:
     train_df = df_train.withColumn("dense_features", seqAsVector("features"))
     spark_model = model.fit(train_df) # start fitting or training
 
+    mlflow.log_params(model_params)
     mlflow.spark.log_model(spark_model,artifact_path="model",registered_model_name=model_name)
 
 
@@ -213,6 +226,7 @@ model_uri = f"models:/{model_name}/{model_version}"
 dbutils.jobs.taskValues.set("model_uri", model_uri)
 dbutils.jobs.taskValues.set("model_name", model_name)
 dbutils.jobs.taskValues.set("model_version", model_version)
+dbutils.jobs.taskValues.set("run_id", run.info.run_id)
 dbutils.notebook.exit(model_uri)
 
 # COMMAND ----------
