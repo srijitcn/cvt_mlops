@@ -5,7 +5,7 @@
 #    node_type_id: Standard_D3_v2
 #    custom_tags:
 #      clusterSource: mlops-stack/0.2
-
+#
 permissions: &permissions
   permissions:
     - level: CAN_VIEW
@@ -41,8 +41,7 @@ resources:
             - task_key: Train
           notebook_task:
             notebook_path: ../validation/notebooks/ModelValidation.py
-            base_parameters:
-              
+            base_parameters:              
               env: ${bundle.target}
               user_uuid: 8243
               patch_output_table_name: mlops_demo.cvt_${bundle.target}.patch_features
