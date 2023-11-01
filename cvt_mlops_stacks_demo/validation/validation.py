@@ -22,14 +22,12 @@ def custom_metrics():
 # TODO(optional) : validation_thresholds
 def validation_thresholds():
     return {
-        "max_error": MetricThreshold(
-            threshold=500, higher_is_better=False  # max_error should be <= 500
+        "accuracy": MetricThreshold(
+            threshold=0.8, higher_is_better=True  # max_error should be <= 500
         ),
-        "mean_squared_error": MetricThreshold(
-            threshold=20,  # mean_squared_error should be <= 20
-            # min_absolute_change=0.01,  # mean_squared_error should be at least 0.01 greater than baseline model accuracy
-            # min_relative_change=0.01,  # mean_squared_error should be at least 1 percent greater than baseline model accuracy
-            higher_is_better=False,
+        "f1_score": MetricThreshold(
+            threshold=.90, 
+            higher_is_better=True,
         ),
     }
 
