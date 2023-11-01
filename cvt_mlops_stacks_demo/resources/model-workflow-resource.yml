@@ -19,7 +19,7 @@ resources:
       #  - job_cluster_key: model_training_job_cluster
       #    <<: *new_cluster
       tasks:
-        - task_key: TrainTask
+        - task_key: TrainTask #
           #job_cluster_key: model_training_job_cluster
           existing_cluster_id: 1030-160409-i28anxhk
           notebook_task:            
@@ -34,7 +34,31 @@ resources:
               experiment_name: /mlops_demo/${bundle.target}_cvt_tumor_classifier
               # git source information of current ML resource deployment. It will be persisted as part of the workflow run
               git_source_info: url:${bundle.git.origin_url}; branch:${bundle.git.branch}; commit:${bundle.git.commit}
-        
+        - task_key: ModelValidation
+          #job_cluster_key: model_training_job_cluster
+          existing_cluster_id: 1030-160409-i28anxhk
+          depends_on:
+            - task_key: TrainTask
+          notebook_task:            
+            notebook_path: ../validation/notebooks/ModelValidation.py
+            base_parameters:              
+              env: ${bundle.target}
+              user_uuid: 8243
+              patch_output_table_name: mlops_demo.cvt_${bundle.target}.patch_features
+              patch_features_module: feature-extraction
+              patch_primary_keys: id
+              model_name: ${bundle.target}.cvt.${var.model_name}
+              experiment_name: /mlops_demo/${bundle.target}_cvt_tumor_classifier
+              run_mode: enabled
+              enable_baseline_comparison: "false"
+              validation_input: SELECT id,features,label FROM mlops_demo.cvt.patch_features LIMIT 10
+              model_type: classifier
+              targets: label
+              custom_metrics_loader_function: custom_metrics
+              validation_thresholds_loader_function: validation_thresholds
+              evaluator_config_loader_function: evaluator_config
+              # git source information of current ML resource deployment. It will be persisted as part of the workflow run
+              git_source_info: url:${bundle.git.origin_url}; branch:${bundle.git.branch}; commit:${bundle.git.commit}
         #- task_key: ModelDeployment
         #  #job_cluster_key: model_training_job_cluster
         #  existing_cluster_id: 1030-160409-i28anxhk
