@@ -127,6 +127,7 @@ from databricks import feature_store
 fs = feature_store.FeatureStoreClient()
 
 #this can be an input data table from gold/silver. For this example we are using feature table
+#
 input_data = spark.table(feature_table).select("id","label").limit(20)
 
 # Create the training set that includes the raw input data merged with corresponding features from both feature tables
