@@ -6,15 +6,8 @@ def spark(request):
     """fixture for creating a spark session
     Args:
         request: pytest.FixtureRequest object
-    """
-    spark = (
-        SparkSession.builder.master("local[1]")
-        .appName("pytest-pyspark-local-testing")
-        .getOrCreate()
-    )
-    request.addfinalizer(lambda: spark.stop())
-
-    return spark
+    """    
+    return None
 
 
 @pytest.mark.usefixtures("spark")
