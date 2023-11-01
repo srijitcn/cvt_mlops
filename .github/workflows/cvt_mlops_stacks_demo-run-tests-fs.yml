@@ -1,4 +1,4 @@
-name: Feature and Training Integration Tests for cvt_mlops_stacks_demo
+name: Unit Tests for cvt_mlops_stacks_demo
 on:
   workflow_dispatch:
   pull_request:

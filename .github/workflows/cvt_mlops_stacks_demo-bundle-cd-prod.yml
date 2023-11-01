@@ -3,7 +3,7 @@
 # and cvt_mlops_stacks_demo/databricks.yml with prod deployment target configs,
 # when PRs are merged into the release branch
 #
-name: Bundle Deployment for cvt_mlops_stacks_demo Prod
+name:  Bundle Deployment and Feature and Training Integration testing for cvt_mlops_stacks_demo Prod
 
 on:
   push:
