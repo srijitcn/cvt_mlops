@@ -39,6 +39,7 @@ jobs:
       - name: Validate Bundle For Staging
         id: validate
         env:
+          DATABRICKS_TOKEN : ${{ secrets.DB_TOKEN }}
           #ARM_TENANT_ID: ${{ env.STAGING_ARM_TENANT_ID }}
           #ARM_CLIENT_ID: ${{ env.STAGING_ARM_CLIENT_ID }}
           #ARM_CLIENT_SECRET: ${{ env.STAGING_ARM_CLIENT_SECRET }}
@@ -85,6 +86,7 @@ jobs:
       - name: Validate Bundle For Prod
         id: validate
         env:
+          DATABRICKS_TOKEN : ${{ secrets.DB_TOKEN }}
           #ARM_TENANT_ID: ${{ env.PROD_ARM_TENANT_ID }}
           #ARM_CLIENT_ID: ${{ env.PROD_ARM_CLIENT_ID }}
           #ARM_CLIENT_SECRET: ${{ env.PROD_ARM_CLIENT_SECRET }}
