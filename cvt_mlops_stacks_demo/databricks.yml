@@ -4,8 +4,8 @@ bundle:
 
 variables:
   experiment_name:
-    description: Experiment name for the model training.
-    default: /Users/${workspace.current_user.userName}/${bundle.target}-cvt_mlops_stacks_demo-experiment
+    description: Experiment name for the model training.    
+    default: /mlops_demo/${bundle.target}_cvt_tumor_classifier
   model_name:
     description: Model name for the model training.
     default: cvt_tumor_classifier

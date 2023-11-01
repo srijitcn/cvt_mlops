@@ -20,9 +20,9 @@ resources:
       #    <<: *new_cluster
       tasks:
         - task_key: Train
-          #job_cluster_key: model_training_job_cluster
-          existing_cluster_id: 1030-160409-i28anxhk
+          #job_cluster_key: model_training_job_cluster          
           notebook_task:
+            existing_cluster_id: 1030-160409-i28anxhk
             notebook_path: ../training/notebooks/TrainWithFeatureStore.py
             base_parameters:
               env: ${bundle.target}
@@ -35,11 +35,11 @@ resources:
               # git source information of current ML resource deployment. It will be persisted as part of the workflow run
               git_source_info: url:${bundle.git.origin_url}; branch:${bundle.git.branch}; commit:${bundle.git.commit}
         - task_key: ModelValidation
-          #job_cluster_key: model_training_job_cluster
-          existing_cluster_id: 1030-160409-i28anxhk
+          #job_cluster_key: model_training_job_cluster          
           depends_on:
             - task_key: Train
           notebook_task:
+            existing_cluster_id: 1030-160409-i28anxhk
             notebook_path: ../validation/notebooks/ModelValidation.py
             base_parameters:              
               env: ${bundle.target}
