@@ -19,7 +19,7 @@ resources:
       #  - job_cluster_key: model_training_job_cluster
       #    <<: *new_cluster
       tasks:
-        - task_key: Train
+        - task_key: TrainTask
           #job_cluster_key: model_training_job_cluster
           existing_cluster_id: 1030-160409-i28anxhk
           notebook_task:            
@@ -38,7 +38,7 @@ resources:
           #job_cluster_key: model_training_job_cluster
           existing_cluster_id: 1030-160409-i28anxhk
           depends_on:
-            - task_key: Train
+            - task_key: TrainTask
           notebook_task:            
             notebook_path: ../validation/notebooks/ModelValidation.py
             base_parameters:              
