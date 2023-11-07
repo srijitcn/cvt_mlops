@@ -48,7 +48,7 @@ dbutils.widgets.text("user_uuid","8243",label="User UUID")
 dbutils.widgets.text("experiment_name","/mlops_demo/dev_cvt_tumor_classifier",label="MLflow experiment name")
 
 # Unity Catalog registered model name to use for the trained mode.
-dbutils.widgets.text("model_name", "cvt_tumor_classifier", label="Model Registry name")
+dbutils.widgets.text("model_name", "mlops_demo.cvt.cvt_tumor_classifier", label="Full (Three-Level) Model Name")
 
 # Feature table to store the computed features.
 dbutils.widgets.text("patch_feature_table_name","mlops_demo.cvt.patch_features",label="Output Feature Table Name")
@@ -67,7 +67,39 @@ model_name = dbutils.widgets.get("model_name")
 
 # COMMAND ----------
 
+# DBTITLE 1, Set experiment
+import mlflow
+
+mlflow.set_experiment(experiment_name)
+mlflow.set_registry_uri('databricks-uc')
+
+# COMMAND ----------
+
 # DBTITLE 1, Helper functions
+from pyspark.sql.functions import col
+
+from petastorm.spark import SparkDatasetConverter, make_spark_converter
+
+import io
+import numpy as np
+import torch
+import torchvision
+from PIL import Image
+from functools import partial 
+from petastorm import TransformSpec
+from torchvision import transforms
+
+from hyperopt import fmin, tpe, hp, SparkTrials, STATUS_OK
+
+import horovod.torch as hvd
+from sparkdl import HorovodRunner
+
+import mlflow
+import mlflow.pytorch
+from mlflow.tracking import MlflowClient
+
+# COMMAND ----------
+
 import json
 import os
 from pprint import pprint
@@ -85,17 +117,8 @@ except FileNotFoundError:
 
 # COMMAND ----------
 
-# DBTITLE 1, Set experiment
-import mlflow
-import mlflow.pytorch
-from mlflow.tracking import MlflowClient
-
-
-# COMMAND ----------
-
 IMG_PATH = settings['img_path']
-mlflow.set_registry_uri('databricks')
-experiment_info = mlflow.set_experiment(experiment_name)
+experiment_info=mlflow.set_experiment(settings['experiment_name'])
 
 # COMMAND ----------
 
@@ -119,10 +142,16 @@ feature_lookups = [
 # DBTITLE 1, Create Training Dataset
 from databricks import feature_store
 
+# End any existing runs (in the case this notebook is being run for a second time)
+mlflow.end_run()
+
+# Start an mlflow run, which is needed for the feature store to log the model
+mlflow.start_run()
+
+
 fs = feature_store.FeatureStoreClient()
 
 #this can be an input data table from gold/silver. For this example we are using feature table
-#
 input_data = spark.table(feature_table).select("id","label").limit(20)
 
 # Create the training set that includes the raw input data merged with corresponding features from both feature tables
@@ -156,55 +185,57 @@ df_train, df_val = training_df.randomSplit([0.7, 0.3], seed=12345)
 from pyspark import keyword_only
 from pyspark.ml.classification import LogisticRegression
 from pyspark.ml.feature import VectorAssembler
-from pyspark.ml import Pipeline, Transformer
+from pyspark.ml import Pipeline
 from pyspark.sql import DataFrame
 
-from pyspark.ml.linalg import Vectors, VectorUDT
-from pyspark.sql.functions import col, udf
+from custom_transformers import DenseVectorizer
 
-seqAsVector = udf(lambda x : Vectors.dense(x), returnType=VectorUDT())
+# used as a multi class classifier
+lr = LogisticRegression(maxIter=1, regParam=0.03, elasticNetParam=0.5, labelCol="label", featuresCol="feature")
+dv = DenseVectorizer(inputCol="features",outputCol="dense_features")
+va = VectorAssembler(inputCols=["dense_features"],outputCol="feature")
 
-mlflow.spark.autolog()
+# define a pipeline model
+model = Pipeline(stages=[dv,va,lr])
 
-#mostly we will have a hyper parameter tuning step here
-model_params = {
-    "maxIter":1,
-    "regParam":0.03,
-    "elasticNetParam":0.5
-}
+spark_model = model.fit(df_train) # start fitting or training
 
-with mlflow.start_run() as run:
-    # used as a multi class classifier
-    lr = LogisticRegression(maxIter=model_params["maxIter"],
-                            regParam=model_params["regParam"], 
-                            elasticNetParam=model_params["elasticNetParam"],
-                            labelCol="label",
-                            featuresCol="feature")
-    
-    va = VectorAssembler(inputCols=["dense_features"],outputCol="feature")
+# COMMAND ----------
 
-    # define a pipeline model
-    model = Pipeline(stages=[va,lr])
-    train_df = df_train.withColumn("dense_features", seqAsVector("features"))
-    spark_model = model.fit(train_df) # start fitting or training
+df_val.count()
 
-    mlflow.log_params(model_params)
-    mlflow.spark.log_model(spark_model,artifact_path="model",registered_model_name=model_name)
+# COMMAND ----------
 
+pred_df = spark_model.transform(df_val)
+
+# COMMAND ----------
+
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+
+evaluator = MulticlassClassificationEvaluator() 
+
+f1_score = evaluator.evaluate(pred_df, {evaluator.metricName: 'f1'})
+precision = evaluator.evaluate(pred_df,{evaluator.metricName: 'weightedPrecision'})
+recall = evaluator.evaluate(pred_df, {evaluator.metricName: 'weightedRecall'})
+accuracy = evaluator.evaluate(pred_df, {evaluator.metricName: 'accuracy'})
+
+print('F1-Score ', f1_score)
+print('Precision ', precision)
+print('Recall ', recall)
+print('Accuracy ', accuracy)
 
 # COMMAND ----------
 
 # DBTITLE 1, Log model and return output.
 
 # Log the trained model with MLflow and package it with feature lookup information.
-#fs.log_model(
-#    spark_model,
-#    artifact_path="model_packaged",
-#    flavor=mlflow.spark,
-#    training_set=training_set,
-#    registered_model_name=model_name,
-#)
-
+fs.log_model(
+    spark_model,
+    artifact_path="model_packaged",
+    flavor=mlflow.spark,
+    training_set=training_set,
+    registered_model_name=model_name,
+)
 
 
 # COMMAND ----------
@@ -226,8 +257,36 @@ model_uri = f"models:/{model_name}/{model_version}"
 dbutils.jobs.taskValues.set("model_uri", model_uri)
 dbutils.jobs.taskValues.set("model_name", model_name)
 dbutils.jobs.taskValues.set("model_version", model_version)
-dbutils.jobs.taskValues.set("run_id", run.info.run_id)
-dbutils.notebook.exit(model_uri)
+#dbutils.notebook.exit(model_uri)
+
+# COMMAND ----------
+
+model_uri
+
+# COMMAND ----------
+
+display(input_data)
+
+# COMMAND ----------
+
+res_df = fs.score_batch(model_uri,input_data)
+
+# COMMAND ----------
+
+display(res_df)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ##### Trying to do Non Feature Store scoring
+
+# COMMAND ----------
+
+mm = mlflow.pyfunc.spark_udf(spark, model_uri=model_uri)
+
+# COMMAND ----------
+
+display(training_df.withColumn("preds", mm("features")))
 
 # COMMAND ----------
 
