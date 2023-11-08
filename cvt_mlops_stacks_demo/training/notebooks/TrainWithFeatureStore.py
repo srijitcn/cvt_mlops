@@ -234,7 +234,8 @@ fs.log_model(
     artifact_path="model_packaged",
     flavor=mlflow.spark,
     training_set=training_set,
-    registered_model_name=model_name,
+    registered_model_name=model_name, 
+    code_paths=["./custom_transformers.py"]
 )
 
 
@@ -279,6 +280,10 @@ display(res_df)
 
 # MAGIC %md
 # MAGIC ##### Trying to do Non Feature Store scoring
+
+# COMMAND ----------
+
+
 
 # COMMAND ----------
 

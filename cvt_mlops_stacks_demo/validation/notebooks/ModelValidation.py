@@ -75,7 +75,7 @@ dbutils.widgets.text("custom_metrics_loader_function", "custom_metrics", "Custom
 dbutils.widgets.text("validation_input", "SELECT id,features,label FROM mlops_demo.cvt.patch_features LIMIT 10", "Validation Input")
 dbutils.widgets.text("validation_thresholds_loader_function", "validation_thresholds", "Validation Thresholds Loader Function")
 dbutils.widgets.text("evaluator_config_loader_function", "evaluator_config", "Evaluator Config Loader Function")
-dbutils.widgets.text("model_name", "cvt_tumor_classifier", label="Full (Three-Level) Model Name")
+dbutils.widgets.text("model_name", "mlops_demo.cvt.cvt_tumor_classifier", label="Full (Three-Level) Model Name")
 dbutils.widgets.text("model_version", "5", "Candidate Model Version")
 dbutils.widgets.text("env", "dev", "model environment")
 
@@ -116,7 +116,7 @@ import traceback
 
 from mlflow.tracking.client import MlflowClient
 
-client = MlflowClient(registry_uri="databricks")
+client = MlflowClient(registry_uri="databricks-uc")
 
 # set experiment
 experiment_name = dbutils.widgets.get("experiment_name")
@@ -221,7 +221,7 @@ def log_to_model_description(run, success):
 
 import mlflow
 mlflow.set_experiment(experiment_name)
-mlflow.set_registry_uri('databricks')
+mlflow.set_registry_uri('databricks-uc')
 
 def get_latest_model_version(model_name):
     latest_version = 1
@@ -235,18 +235,22 @@ def get_latest_model_version(model_name):
 
 # COMMAND ----------
 
-from pyspark.ml.linalg import Vectors, VectorUDT
-from pyspark.sql.functions import col, udf
-seqAsVector = udf(lambda x : Vectors.dense(x), returnType=VectorUDT())
+#from pyspark.ml.linalg import Vectors, VectorUDT
+#from pyspark.sql.functions import col, udf
+#seqAsVector = udf(lambda x : Vectors.dense(x), returnType=VectorUDT())
 
 # COMMAND ----------
 
-data = spark.sql("SELECT id,features,label FROM mlops_demo.cvt.patch_features LIMIT 10")
-eval_data = data.withColumn("dense_features", seqAsVector("features")).cache()
+eval_data = spark.sql("SELECT id,label FROM mlops_demo.cvt.patch_features LIMIT 10")
+#eval_data = data.withColumn("dense_features", seqAsVector("features")).cache()
 
 # COMMAND ----------
 
 eval_data.count()
+
+# COMMAND ----------
+
+model_name 
 
 # COMMAND ----------
 
@@ -255,11 +259,18 @@ model_uri = f"models:/{model_name}/{model_version}"
 
 # COMMAND ----------
 
-model = mlflow.spark.load_model(model_uri)
+model_uri
 
 # COMMAND ----------
 
-result_df = model.transform(eval_data).select("prediction","label")
+from databricks import feature_store
+
+fs = feature_store.FeatureStoreClient()
+
+
+# COMMAND ----------
+
+result_df = fs.score_batch(model_uri, eval_data).select("prediction","label")
 
 # COMMAND ----------
 
@@ -355,7 +366,8 @@ with mlflow.start_run(
         target_stage = "Production" if env == "production" else "Staging"
         
         print(f"Validation checks passed. Transitioning to {target_stage}")
-        client.transition_model_version_stage(model_name,version=model_version, stage=target_stage, archive_existing_versions=True)
+        #client.transition_model_version_stage(model_name,version=model_version, stage=target_stage, archive_existing_versions=True)
+        client.set_registered_model_alias(model_name,version=model_version,alias="challenger")
         
     except Exception as err:
         log_to_model_description(run, False)
